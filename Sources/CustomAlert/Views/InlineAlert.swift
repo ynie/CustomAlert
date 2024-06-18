@@ -9,20 +9,35 @@ import SwiftUI
 
 /// Display a view styled like an alert inline
 public struct InlineAlert<Content, Actions>: View where Content: View, Actions: View {
-    @ViewBuilder var content: () -> Content
-    @ViewBuilder var actions: () -> Actions
+    let content: Content
+    let actions: Actions
     
     private var cornerRadius: CGFloat = 13.3333
     
     public var body: some View {
         VStack(spacing: 0) {
-            content()
+            content
             
-            _VariadicView.Tree(ContentLayout(), content: actions)
-                .buttonStyle(.alert)
+            #if swift(>=6.0)
+            if #available(iOS 18.0, *) {
+                ForEach(subviewOf: actions) { child in
+                    Divider()
+                    child
+                }
+            } else {
+                _VariadicView.Tree(ContentLayout()) {
+                    actions
+                }
+            }
+            #else
+            _VariadicView.Tree(ContentLayout()) {
+                actions
+            }
+            #endif
         }
+        .buttonStyle(.alert)
         .background(Color(.secondarySystemGroupedBackground))
-        .listRowInsets(EdgeInsets())
+        .listRowInsets(.zero)
         .cornerRadius(cornerRadius)
     }
     
@@ -30,8 +45,8 @@ public struct InlineAlert<Content, Actions>: View where Content: View, Actions: 
         @ViewBuilder content: @escaping () -> Content,
         @ViewBuilder actions: @escaping () -> Actions
     ) {
-        self.content = content
-        self.actions = actions
+        self.content = content()
+        self.actions = actions()
     }
     
     /// Change the corner radius of the alert view
@@ -43,12 +58,36 @@ public struct InlineAlert<Content, Actions>: View where Content: View, Actions: 
         return view
     }
     
+    @available(iOS, introduced: 14.0, deprecated: 18.0, message: "Use `ForEach(subviewOf:content:)` instead")
     struct ContentLayout: _VariadicView_ViewRoot {
         func body(children: _VariadicView.Children) -> some View {
             VStack(spacing: 0) {
                 ForEach(children) { child in
                     Divider()
                     child
+                }
+            }
+        }
+    }
+}
+
+@available(iOS 15.0, *)
+#Preview {
+    List {
+        InlineAlert {
+            Text("Hello World")
+                .padding()
+        } actions: {
+            MultiButton {
+                Button(role: .cancel) {
+                    print("Cancel")
+                } label: {
+                    Text("Cancel")
+                }
+                Button {
+                    print("OK")
+                } label: {
+                    Text("OK")
                 }
             }
         }

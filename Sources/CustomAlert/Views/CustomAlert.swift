@@ -11,10 +11,10 @@ import SwiftUI
 struct CustomAlert<Content, Actions>: View where Content: View, Actions: View {
     @Environment(\.customAlertConfiguration) private var configuration
     
-    var title: Text?
     @Binding var isPresented: Bool
-    @ViewBuilder var content: () -> Content
-    @ViewBuilder var actions: () -> Actions
+    var title: Text?
+    var content: Content
+    var actions: Actions
     
     // Size holders to enable scrolling of the content if needed
     @State private var viewSize: CGSize = .zero
@@ -26,10 +26,23 @@ struct CustomAlert<Content, Actions>: View where Content: View, Actions: View {
     // Used to animate the appearance
     @State private var isShowing = false
     
+    init(
+        isPresented: Binding<Bool>,
+        title: @escaping () -> Text?,
+        @ViewBuilder content: () -> Content,
+        @ViewBuilder actions: () -> Actions
+    ) {
+        self._isPresented = isPresented
+        self.title = title()
+        self.content = content()
+        self.actions = actions()
+    }
+    
     var body: some View {
         ZStack {
             BackgroundView(background: configuration.background)
                 .edgesIgnoringSafeArea(.all)
+                .accessibilityAddTraits(configuration.dismissOnBackgroundTap ? [.isButton] : [])
                 .onTapGesture {
                     if configuration.dismissOnBackgroundTap {
                         isPresented = false
@@ -42,8 +55,7 @@ struct CustomAlert<Content, Actions>: View where Content: View, Actions: View {
                 }
                 
                 if isShowing {
-                    alert
-                        .animation(nil, value: height)
+                    alert.animation(nil, value: height)
                 }
                 
                 if configuration.alignment.hasBottomSpacer {
@@ -99,7 +111,7 @@ struct CustomAlert<Content, Actions>: View where Content: View, Actions: View {
                             .font(configuration.alert.titleFont)
                             .multilineTextAlignment(configuration.alert.textAlignment)
                         
-                        content()
+                        content
                             .font(configuration.alert.contentFont)
                             .multilineTextAlignment(configuration.alert.textAlignment)
                             .frame(maxWidth: .infinity, alignment: configuration.alert.frameAlignment)
@@ -119,9 +131,33 @@ struct CustomAlert<Content, Actions>: View where Content: View, Actions: View {
             }
             .frame(height: height)
             
-            _VariadicView.Tree(ContentLayout(), content: actions)
-                .modifier(AlertButton(isPresented: $isPresented))
-                .captureSize($actionsSize)
+            Group {
+                #if swift(>=6.0)
+                if #available(iOS 18.0, *) {
+                    VStack(spacing: 0) {
+                        ForEach(subviewOf: actions) { child in
+                            if !configuration.button.hideDivider {
+                                Divider()
+                            }
+                            child
+                        }
+                    }
+                } else {
+                    _VariadicView.Tree(ActionLayout()) {
+                        actions
+                    }
+                }
+                #else
+                _VariadicView.Tree(ActionLayout()) {
+                    actions
+                }
+                #endif
+            }
+            .onAlertDismiss {
+                isPresented = false
+            }
+            .buttonStyle(.alert)
+            .captureSize($actionsSize)
         }
         .frame(minWidth: minWidth, maxWidth: maxWidth)
         .background(BackgroundView(background: configuration.alert.background))
@@ -132,7 +168,8 @@ struct CustomAlert<Content, Actions>: View where Content: View, Actions: View {
     }
 }
 
-struct ContentLayout: _VariadicView_ViewRoot {
+@available(iOS, introduced: 14.0, deprecated: 18.0, message: "Use `ForEach(subviewOf:content:)` instead")
+struct ActionLayout: _VariadicView_ViewRoot {
     @Environment(\.customAlertConfiguration) private var configuration
     
     func body(children: _VariadicView.Children) -> some View {
@@ -147,23 +184,11 @@ struct ContentLayout: _VariadicView_ViewRoot {
     }
 }
 
-private struct AlertButton: ViewModifier {
-    @Environment(\.isEnabled) var isEnabled
-    @Binding var isPresented: Bool
-    
-    func body(content: Content) -> some View {
-        content
-            .simultaneousGesture(TapGesture().onEnded { _ in
-                guard isEnabled else { return }
-                isPresented = false
-            }, including: .all)
-            .buttonStyle(.alert)
-    }
-}
-
 struct CustomAlert_Previews: PreviewProvider {
     static var previews: some View {
-        CustomAlert(title: Text("Preview"), isPresented: .constant(true)) {
+        CustomAlert(isPresented: .constant(true)) {
+            Text("Preview")
+        } content: {
             Text("Content")
         } actions: {
             Button {
@@ -173,7 +198,9 @@ struct CustomAlert_Previews: PreviewProvider {
         }
         .previewDisplayName("Default")
         
-        CustomAlert(title: Text("Preview"), isPresented: .constant(true)) {
+        CustomAlert(isPresented: .constant(true)) {
+            Text("Preview")
+        } content: {
             Text("Content")
         } actions: {
             MultiButton {

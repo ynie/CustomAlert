@@ -8,6 +8,7 @@
 import Foundation
 import SwiftUI
 
+/// Configuration values for custom alerts
 public struct CustomAlertConfiguration {
     /// The configuration of the alert view
     public var alert: Alert = .init()
@@ -25,9 +26,10 @@ public struct CustomAlertConfiguration {
     public var dismissOnBackgroundTap: Bool = false
     
     /// Create a custom configuration
+    /// 
     /// - Parameter configure: Callback to change the default configuration
     /// 
-    /// - Returns: The configured ``CustomAlertConfiguration`` configuration
+    /// - Returns: The customized ``CustomAlertConfiguration`` configuration
     public static func create(configure: (inout Self) -> Void) -> Self {
         var configuration = Self()
         configure(&configuration)
